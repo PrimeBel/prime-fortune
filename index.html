@@ -85,6 +85,30 @@ button:disabled{opacity:.6;cursor:not-allowed}
 }
 .history-item h4{color:#f5ca63;margin:4px 0 10px}
 .history-item p{font-size:13px;margin:7px 0}
+.stats-card{
+ border:1px solid #b88b3e;border-radius:14px;
+ padding:15px;margin:14px 0;text-align:left;
+ background:linear-gradient(145deg,#30200d,#15100a);
+}
+.stats-card h3{color:#f5ca63;text-align:center;margin-top:0}
+.stats-number{
+ color:#ffe29a;font-size:25px;font-weight:bold;
+}
+.stats-label{color:#bda16c;font-size:12px}
+.stats-prize-row{
+ display:flex;justify-content:space-between;gap:10px;
+ padding:10px 0;border-bottom:1px solid #5b431f;
+ font-size:13px;
+}
+.stats-prize-row:last-child{border-bottom:0}
+.stats-bar{
+ height:7px;border-radius:10px;background:#493519;
+ margin-top:6px;overflow:hidden;
+}
+.stats-bar-fill{
+ height:100%;border-radius:10px;
+ background:linear-gradient(90deg,#b77b20,#ffe29a);
+}
 </style>
 </head>
 <body>
@@ -417,23 +441,128 @@ async function savePrize(id,saveButton){
  }
 }
 
-/* ИСТОРИЯ ВСЕХ ВРАЩЕНИЙ */
+/* ИСТОРИЯ И СТАТИСТИКА */
 async function loadSpinHistory(){
  const list = document.getElementById("history-list");
  if(!list) return;
 
- list.innerHTML = "Загружаем историю...";
+ list.innerHTML = "Загружаем историю и статистику...";
 
  try{
   const data = await adminRequest({action:"list_spins"});
   const spins = Array.isArray(data.spins) ? data.spins : [];
 
-  if(!spins.length){
-   list.innerHTML = '<p>Пока вращений нет.</p>';
-   return;
-  }
+  /* Считаем уникальных игроков */
+  const players = new Set(
+   spins.map(s => String(s.user_telegram_id))
+  );
+
+  /* Считаем выпадения каждого приза */
+  const prizeCounts = {};
+
+  spins.forEach(s=>{
+   const name = s.prize_name || "Приз не указан";
+   prizeCounts[name] = (prizeCounts[name] || 0) + 1;
+  });
+
+  /* Находим самый популярный приз */
+  const sortedPrizes = Object.entries(prizeCounts)
+   .sort((a,b)=>b[1]-a[1]);
+
+  const popularPrize = sortedPrizes.length
+   ? sortedPrizes[0]
+   : null;
+
+  /* Формируем статистику */
+  const stats = document.createElement("div");
+  stats.className = "stats-card";
+
+  stats.innerHTML = `
+   <h3>📊 ОБЩАЯ СТАТИСТИКА</h3>
+
+   <div style="display:flex;justify-content:space-around;gap:10px;text-align:center;">
+    <div>
+     <div class="stats-number">${spins.length}</div>
+     <div class="stats-label">ВРАЩЕНИЙ</div>
+    </div>
+    <div>
+     <div class="stats-number">${players.size}</div>
+     <div class="stats-label">ИГРОКОВ</div>
+    </div>
+   </div>
+
+   <div style="margin-top:18px;text-align:center;">
+    <div class="stats-label">🏆 САМЫЙ ПОПУЛЯРНЫЙ ПРИЗ</div>
+    <div style="color:#ffe29a;font-size:19px;font-weight:bold;margin-top:7px;">
+     ${popularPrize ? escapeHtml(popularPrize[0]) : "Пока нет данных"}
+    </div>
+    <div class="stats-label" style="margin-top:5px;">
+     Выпадал ${popularPrize ? popularPrize[1] : 0} раз
+    </div>
+   </div>
+
+   <p style="font-size:11px;text-align:center;color:#9d8962;margin-bottom:0;">
+    Статистика по последним 200 вращениям
+   </p>
+  `;
 
   list.innerHTML = "";
+  list.appendChild(stats);
+
+  /* Таблица частоты выпадения призов */
+  const breakdown = document.createElement("div");
+  breakdown.className = "stats-card";
+
+  breakdown.innerHTML = `
+   <h3>🎁 ПОПУЛЯРНОСТЬ ПРИЗОВ</h3>
+   <div id="prize-statistics"></div>
+  `;
+
+  list.appendChild(breakdown);
+
+  const prizeStatistics = breakdown.querySelector("#prize-statistics");
+
+  if(!sortedPrizes.length){
+   prizeStatistics.innerHTML = '<p>Пока нет данных о призах.</p>';
+  }else{
+   sortedPrizes.forEach(([name,count])=>{
+    const percent = spins.length
+     ? (count/spins.length*100).toFixed(1)
+     : "0.0";
+
+    const row = document.createElement("div");
+    row.className = "stats-prize-row";
+
+    row.innerHTML = `
+     <div style="flex:1;min-width:0;">
+      <div style="color:#ffe29a;">${escapeHtml(name)}</div>
+      <div class="stats-bar">
+       <div class="stats-bar-fill" style="width:${percent}%;"></div>
+      </div>
+     </div>
+     <div style="text-align:right;white-space:nowrap;">
+      <div style="color:#f5ca63;font-weight:bold;">${count} раз</div>
+      <div style="color:#9d8962;font-size:11px;">${percent}%</div>
+     </div>
+    `;
+
+    prizeStatistics.appendChild(row);
+   });
+  }
+
+  /* Список истории вращений */
+  const historyTitle = document.createElement("h3");
+  historyTitle.textContent = "📜 ПОСЛЕДНИЕ ВЫИГРЫШИ";
+  historyTitle.style.color = "#f5ca63";
+  historyTitle.style.marginTop = "24px";
+  list.appendChild(historyTitle);
+
+  if(!spins.length){
+   const empty = document.createElement("p");
+   empty.textContent = "Пока вращений нет.";
+   list.appendChild(empty);
+   return;
+  }
 
   spins.forEach(spin=>{
    const item = document.createElement("div");
@@ -503,10 +632,10 @@ function showAdminSection(section){
  if(section === "history"){
   area.innerHTML = `
    <div class="admin-section">
-    <h3 style="color:#f5ca63;">📜 ИСТОРИЯ ВСЕХ ВРАЩЕНИЙ</h3>
-    <p>Последние 200 вращений всех игроков.</p>
+    <h3 style="color:#f5ca63;">📜 ИСТОРИЯ И СТАТИСТИКА</h3>
+    <p>Статистика и последние 200 вращений всех игроков.</p>
     <button id="history-refresh" type="button" style="width:100%;">
-     ОБНОВИТЬ ИСТОРИЮ
+     ОБНОВИТЬ СТАТИСТИКУ
     </button>
     <div id="history-list" class="admin-message" aria-live="polite">
      Загружаем историю...
