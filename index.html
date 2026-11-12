@@ -46,7 +46,18 @@ button:disabled{opacity:.6}
 <div id="auth-status" style="color:#d4af37;text-align:center;padding:10px;">
 Подключение к PRIME FORTUNE...
 </div>
+ 
+<div id="admin-area" style="display:none;max-width:440px;margin:15px auto;">
+  <button id="admin-open" style="width:100%;">
+    АДМИН-ПАНЕЛЬ
+  </button>
 
+  <div id="admin-content" style="display:none;color:#f8e7b0;margin-top:15px;">
+    <h2>УПРАВЛЕНИЕ PRIME FORTUNE</h2>
+    <p>Панель администратора</p>
+    <p>Скоро здесь появится управление призами и попытками.</p>
+  </div>
+</div>
 <h1>PRIME FORTUNE</h1>
 <div class="subtitle">YOUR LUCK · YOUR FORTUNE</div>
 
@@ -148,7 +159,32 @@ function getPrizeName(prize){
 
  return "";
 }
+async function checkAdmin(){
+ try{
+  const response = await fetch(
+   SUPABASE_URL + "/functions/v1/admin-panel",
+   {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({initData})
+   }
+  );
 
+  const data = await response.json();
+
+  if(response.ok && data.success && data.is_admin){
+   document.getElementById("admin-area").style.display = "block";
+  }
+ }catch(error){
+  console.error("Admin check failed");
+ }
+}
+
+document.getElementById("admin-open").addEventListener("click",()=>{
+ const panel = document.getElementById("admin-content");
+ panel.style.display =
+  panel.style.display === "none" ? "block" : "none";
+});
 async function connectTelegram(){
  if(!window.Telegram || !Telegram.WebApp){
   statusBox.textContent = "Открой приложение через Telegram";
@@ -184,7 +220,8 @@ async function connectTelegram(){
   authReady = true;
   button.disabled = false;
   statusBox.textContent = "PRIME FORTUNE: подключено ✓";
-
+await checkAdmin();
+  
  }catch(error){
   statusBox.textContent = "Ошибка подключения: " + error.message;
  }
