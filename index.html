@@ -78,6 +78,13 @@ button:disabled{opacity:.6;cursor:not-allowed}
  color:#f8e7b0;font-size:14px;margin-top:12px;
 }
 .active-row input{width:20px;height:20px;accent-color:#d4a544}
+.history-item{
+ border:1px solid #765523;border-radius:12px;
+ padding:13px;margin:12px 0;text-align:left;
+ background:#15100a;overflow-wrap:anywhere;
+}
+.history-item h4{color:#f5ca63;margin:4px 0 10px}
+.history-item p{font-size:13px;margin:7px 0}
 </style>
 </head>
 <body>
@@ -410,6 +417,56 @@ async function savePrize(id,saveButton){
  }
 }
 
+/* ИСТОРИЯ ВСЕХ ВРАЩЕНИЙ */
+async function loadSpinHistory(){
+ const list = document.getElementById("history-list");
+ if(!list) return;
+
+ list.innerHTML = "Загружаем историю...";
+
+ try{
+  const data = await adminRequest({action:"list_spins"});
+  const spins = Array.isArray(data.spins) ? data.spins : [];
+
+  if(!spins.length){
+   list.innerHTML = '<p>Пока вращений нет.</p>';
+   return;
+  }
+
+  list.innerHTML = "";
+
+  spins.forEach(spin=>{
+   const item = document.createElement("div");
+   item.className = "history-item";
+
+   const date = spin.created_at
+    ? new Date(spin.created_at).toLocaleString("ru-RU")
+    : "Дата не указана";
+
+   const playerId = spin.user_telegram_id ?? "Не указан";
+   const prizeName = spin.prize_name || "Приз не указан";
+
+   item.innerHTML = `
+    <h4>🎁 ${escapeHtml(prizeName)}</h4>
+    <p>👤 Telegram ID: ${escapeHtml(playerId)}</p>
+    <p>🕒 Дата: ${escapeHtml(date)}</p>
+    <p style="color:#8f754b;font-size:11px;">
+     ID вращения: ${escapeHtml(spin.id || "")}
+    </p>
+   `;
+
+   list.appendChild(item);
+  });
+
+ }catch(error){
+  list.innerHTML = `
+   <p style="color:#ff9b75;">
+    Ошибка загрузки истории: ${escapeHtml(error.message)}
+   </p>
+  `;
+ }
+}
+
 function showAdminSection(section){
  const area = document.getElementById("admin-section");
 
@@ -446,10 +503,21 @@ function showAdminSection(section){
  if(section === "history"){
   area.innerHTML = `
    <div class="admin-section">
-    <h3 style="color:#f5ca63;">📜 ИСТОРИЯ ВЫИГРЫШЕЙ</h3>
-    <p>Раздел истории пока находится в разработке.</p>
+    <h3 style="color:#f5ca63;">📜 ИСТОРИЯ ВСЕХ ВРАЩЕНИЙ</h3>
+    <p>Последние 200 вращений всех игроков.</p>
+    <button id="history-refresh" type="button" style="width:100%;">
+     ОБНОВИТЬ ИСТОРИЮ
+    </button>
+    <div id="history-list" class="admin-message" aria-live="polite">
+     Загружаем историю...
+    </div>
    </div>
   `;
+
+  document.getElementById("history-refresh")
+   .addEventListener("click",loadSpinHistory);
+
+  loadSpinHistory();
  }
 }
 
@@ -481,7 +549,7 @@ async function grantAttempts(){
  output.textContent = "Отправляем запрос...";
 
  try{
-  const data = await adminRequest({
+  await adminRequest({
    action:"grant_attempts",
    target_telegram_id:playerId,
    amount
