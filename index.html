@@ -36,7 +36,7 @@ button{
  letter-spacing:1px;cursor:pointer;
  box-shadow:0 5px 20px #d69b3b55;
 }
-button:disabled{opacity:.6}
+button:disabled{opacity:.6;cursor:not-allowed}
 #result{font-size:20px;margin:20px 0;color:#ffe29a;min-height:28px}
 .note{font-size:12px;color:#a9956c;line-height:1.6}
 .admin-button{width:100%;margin:10px 0}
@@ -62,6 +62,22 @@ button:disabled{opacity:.6}
  min-height:24px;margin-top:14px;line-height:1.5;
  color:#ffe29a;font-size:14px;overflow-wrap:anywhere;
 }
+.prize-editor{
+ border:1px solid #765523;border-radius:12px;
+ padding:13px;margin:14px 0;text-align:left;
+ background:#15100a;
+}
+.prize-editor h4{color:#f5ca63;margin:4px 0 10px}
+.prize-editor label{
+ display:block;color:#c6a96a;font-size:12px;margin-top:10px;
+}
+.prize-editor .admin-input{margin:5px 0}
+.prize-save{width:100%;margin-top:12px}
+.active-row{
+ display:flex;align-items:center;gap:10px;
+ color:#f8e7b0;font-size:14px;margin-top:12px;
+}
+.active-row input{width:20px;height:20px;accent-color:#d4a544}
 </style>
 </head>
 <body>
@@ -71,9 +87,7 @@ button:disabled{opacity:.6}
 </div>
 
 <div id="admin-area" style="display:none;max-width:440px;margin:15px auto;">
- <button id="admin-open" style="width:100%;">
-  АДМИН-ПАНЕЛЬ
- </button>
+ <button id="admin-open" style="width:100%;">АДМИН-ПАНЕЛЬ</button>
 
  <div id="admin-content" class="admin-content">
   <h2>УПРАВЛЕНИЕ ИГРОЙ</h2>
@@ -81,11 +95,9 @@ button:disabled{opacity:.6}
   <button class="admin-button" onclick="showAdminSection('prizes')">
    🎁 УПРАВЛЕНИЕ ПРИЗАМИ
   </button>
-
   <button class="admin-button" onclick="showAdminSection('attempts')">
    🎯 НАЧИСЛЕНИЕ ПОПЫТОК
   </button>
-
   <button class="admin-button" onclick="showAdminSection('history')">
    📜 ИСТОРИЯ ВЫИГРЫШЕЙ
   </button>
@@ -104,7 +116,6 @@ button:disabled{opacity:.6}
 
  <div class="card">
   <h2>КОЛЕСО ФОРТУНЫ</h2>
-
   <svg id="wheel" viewBox="0 0 340 340">
    <g id="slices"></g>
    <circle cx="170" cy="170" r="35" fill="#f3cf78" stroke="#fff0b4" stroke-width="5"/>
@@ -120,7 +131,7 @@ button:disabled{opacity:.6}
 <script>
 const SUPABASE_URL = "https://wbcyekplhoahrzcetlak.supabase.co";
 
-const prizes = [
+const defaultPrizes = [
  "10 БОНУСОВ",
  "25 БОНУСОВ",
  "50 БОНУСОВ",
@@ -136,49 +147,18 @@ const colors = [
  "#d19a3e","#281d10","#b9822e","#4c3515"
 ];
 
-const g = document.getElementById("slices");
-const wheel = document.getElementById("wheel");
-const button = document.getElementById("spin");
-const resultBox = document.getElementById("result");
-const statusBox = document.getElementById("auth-status");
-
+let prizeRows = [];
+let prizes = [...defaultPrizes];
 let rotation = 0;
 let busy = false;
 let initData = "";
 let authReady = false;
 
-function drawWheel(){
- g.innerHTML = "";
-
- prizes.forEach((p,i)=>{
-  const a = i*Math.PI/4-Math.PI/2;
-  const b = (i+1)*Math.PI/4-Math.PI/2;
-
-  const x1 = 170+160*Math.cos(a);
-  const y1 = 170+160*Math.sin(a);
-  const x2 = 170+160*Math.cos(b);
-  const y2 = 170+160*Math.sin(b);
-
-  const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-  path.setAttribute("d",`M170 170 L${x1} ${y1} A160 160 0 0 1 ${x2} ${y2} Z`);
-  path.setAttribute("fill",colors[i]);
-  path.setAttribute("stroke","#f5d58a");
-  path.setAttribute("stroke-width","2");
-  g.appendChild(path);
-
-  const angle = (i+.5)*Math.PI/4-Math.PI/2;
-  const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-  t.setAttribute("x",170+105*Math.cos(angle));
-  t.setAttribute("y",170+105*Math.sin(angle));
-  t.setAttribute("text-anchor","middle");
-  t.setAttribute("dominant-baseline","middle");
-  t.setAttribute("fill","#fff0c4");
-  t.setAttribute("font-size","12");
-  t.setAttribute("font-weight","bold");
-  t.textContent = p;
-  g.appendChild(t);
- });
-}
+const g = document.getElementById("slices");
+const wheel = document.getElementById("wheel");
+const button = document.getElementById("spin");
+const resultBox = document.getElementById("result");
+const statusBox = document.getElementById("auth-status");
 
 function normalize(value){
  return String(value || "")
@@ -190,36 +170,243 @@ function normalize(value){
 
 function getPrizeName(prize){
  if(typeof prize === "string") return prize;
-
  if(prize && typeof prize === "object"){
-  return prize.name ||
-         prize.prize_name ||
-         prize.title ||
-         prize.label ||
-         "";
+  return prize.name || prize.prize_name || prize.title || prize.label || "";
+ }
+ return "";
+}
+
+function escapeHtml(value){
+ return String(value ?? "").replace(/[&<>"']/g, char => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+ }[char]));
+}
+
+async function adminRequest(payload = {}){
+ const response = await fetch(
+  SUPABASE_URL + "/functions/v1/admin-panel",
+  {
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({initData,...payload})
+  }
+ );
+
+ const data = await response.json();
+
+ if(!response.ok || !data.success){
+  throw new Error(data.error || "Ошибка запроса");
  }
 
- return "";
+ return data;
+}
+
+function drawWheel(){
+ g.innerHTML = "";
+
+ if(!prizes.length) return;
+
+ const segment = 2*Math.PI/prizes.length;
+
+ prizes.forEach((p,i)=>{
+  const a = i*segment-Math.PI/2;
+  const b = (i+1)*segment-Math.PI/2;
+
+  const x1 = 170+160*Math.cos(a);
+  const y1 = 170+160*Math.sin(a);
+  const x2 = 170+160*Math.cos(b);
+  const y2 = 170+160*Math.sin(b);
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+  path.setAttribute("d",`M170 170 L${x1} ${y1} A160 160 0 0 1 ${x2} ${y2} Z`);
+  path.setAttribute("fill",colors[i%colors.length]);
+  path.setAttribute("stroke","#f5d58a");
+  path.setAttribute("stroke-width","2");
+  g.appendChild(path);
+
+  const angle = (i+.5)*segment-Math.PI/2;
+  const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+  t.setAttribute("x",170+105*Math.cos(angle));
+  t.setAttribute("y",170+105*Math.sin(angle));
+  t.setAttribute("text-anchor","middle");
+  t.setAttribute("dominant-baseline","middle");
+  t.setAttribute("fill","#fff0c4");
+  t.setAttribute("font-size",prizes.length>8?"9":"11");
+  t.setAttribute("font-weight","bold");
+  t.textContent = p;
+  g.appendChild(t);
+ });
+}
+
+async function loadPrizeData(){
+ try{
+  const data = await adminRequest({action:"list_prizes"});
+
+  prizeRows = Array.isArray(data.prizes) ? data.prizes : [];
+
+  const available = prizeRows.filter(p =>
+   p.is_active === true && (p.stock === null || Number(p.stock)>0)
+  );
+
+  if(available.length){
+   prizes = available.map(p => p.name);
+   drawWheel();
+  }
+
+ }catch(error){
+  console.error("Prize loading failed:",error);
+ }
 }
 
 async function checkAdmin(){
  try{
-  const response = await fetch(
-   SUPABASE_URL + "/functions/v1/admin-panel",
-   {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({initData})
-   }
-  );
+  const data = await adminRequest({action:"check"});
 
-  const data = await response.json();
-
-  if(response.ok && data.success && data.is_admin){
+  if(data.is_admin){
    document.getElementById("admin-area").style.display = "block";
   }
  }catch(error){
-  console.error("Admin check failed", error);
+  console.error("Admin check failed",error);
+ }
+}
+
+async function loadAdminPrizes(){
+ const area = document.getElementById("admin-section");
+ area.innerHTML = `
+  <div class="admin-section">
+   <h3 style="color:#f5ca63;">🎁 УПРАВЛЕНИЕ ПРИЗАМИ</h3>
+   <p>Загружаем призы...</p>
+  </div>
+ `;
+
+ try{
+  const data = await adminRequest({action:"list_prizes"});
+  prizeRows = Array.isArray(data.prizes) ? data.prizes : [];
+
+  if(!prizeRows.length){
+   area.innerHTML = '<div class="admin-section">Призы не найдены.</div>';
+   return;
+  }
+
+  area.innerHTML = `
+   <div class="admin-section">
+    <h3 style="color:#f5ca63;">🎁 УПРАВЛЕНИЕ ПРИЗАМИ</h3>
+    <p>Измени параметры и нажми «СОХРАНИТЬ» у нужного приза.</p>
+    <div id="prize-list"></div>
+    <div id="prize-message" class="admin-message" aria-live="polite"></div>
+   </div>
+  `;
+
+  const list = document.getElementById("prize-list");
+
+  prizeRows.forEach(prize=>{
+   const card = document.createElement("div");
+   card.className = "prize-editor";
+
+   card.innerHTML = `
+    <h4>${escapeHtml(prize.name)}</h4>
+
+    <label>Название приза</label>
+    <input class="admin-input" id="prize-name-${prize.id}"
+     value="${escapeHtml(prize.name)}" maxlength="100">
+
+    <label>Описание</label>
+    <input class="admin-input" id="prize-description-${prize.id}"
+     value="${escapeHtml(prize.description || "")}" maxlength="500">
+
+    <label>Вес выпадения (0–100000)</label>
+    <input class="admin-input" id="prize-weight-${prize.id}"
+     type="number" min="0" max="100000" step="1"
+     value="${Number(prize.weight)}">
+
+    <label>Остаток (пусто = без ограничения)</label>
+    <input class="admin-input" id="prize-stock-${prize.id}"
+     type="number" min="0" step="1"
+     value="${prize.stock === null ? "" : Number(prize.stock)}"
+     placeholder="Без ограничения">
+
+    <label class="active-row">
+     <input id="prize-active-${prize.id}" type="checkbox"
+      ${prize.is_active ? "checked" : ""}>
+     Приз активен
+    </label>
+
+    <button class="prize-save" type="button"
+     data-prize-id="${prize.id}">
+     СОХРАНИТЬ
+    </button>
+   `;
+
+   list.appendChild(card);
+  });
+
+  list.querySelectorAll(".prize-save").forEach(btn=>{
+   btn.addEventListener("click",()=>{
+    savePrize(btn.dataset.prizeId,btn);
+   });
+  });
+
+ }catch(error){
+  area.innerHTML = `
+   <div class="admin-section">
+    <h3 style="color:#f5ca63;">Ошибка загрузки призов</h3>
+    <p>${escapeHtml(error.message)}</p>
+    <button onclick="loadAdminPrizes()">ПОВТОРИТЬ</button>
+   </div>
+  `;
+ }
+}
+
+async function savePrize(id,saveButton){
+ const output = document.getElementById("prize-message");
+
+ const name = document.getElementById("prize-name-"+id).value.trim();
+ const description = document.getElementById("prize-description-"+id).value;
+ const weight = Number(document.getElementById("prize-weight-"+id).value);
+ const stockValue = document.getElementById("prize-stock-"+id).value;
+ const isActive = document.getElementById("prize-active-"+id).checked;
+
+ const stock = stockValue.trim() === "" ? null : Number(stockValue);
+
+ if(!name){
+  output.textContent = "Укажи название приза.";
+  return;
+ }
+
+ if(!Number.isInteger(weight) || weight<0 || weight>100000){
+  output.textContent = "Вес должен быть от 0 до 100000.";
+  return;
+ }
+
+ if(stock!==null && (!Number.isInteger(stock) || stock<0)){
+  output.textContent = "Остаток должен быть целым числом не меньше нуля.";
+  return;
+ }
+
+ saveButton.disabled = true;
+ output.textContent = "Сохраняем изменения...";
+
+ try{
+  await adminRequest({
+   action:"update_prize",
+   prize_id:id,
+   name,
+   description,
+   weight,
+   stock,
+   is_active:isActive
+  });
+
+  output.textContent = "✓ Изменения сохранены!";
+  await loadPrizeData();
+  await loadAdminPrizes();
+
+  const refreshed = document.getElementById("prize-message");
+  if(refreshed) refreshed.textContent = "✓ Изменения сохранены!";
+
+ }catch(error){
+  output.textContent = "Ошибка: " + error.message;
+  saveButton.disabled = false;
  }
 }
 
@@ -227,37 +414,22 @@ function showAdminSection(section){
  const area = document.getElementById("admin-section");
 
  if(section === "prizes"){
-  area.innerHTML = `
-   <div class="admin-section">
-    <h3 style="color:#f5ca63;">🎁 УПРАВЛЕНИЕ ПРИЗАМИ</h3>
-    <p>Здесь будет редактирование названий, вероятностей и остатков призов.</p>
-   </div>
-  `;
+  loadAdminPrizes();
  }
 
  if(section === "attempts"){
   area.innerHTML = `
    <div class="admin-section">
     <h3 style="color:#f5ca63;">🎯 НАЧИСЛЕНИЕ ПОПЫТОК</h3>
-    <p>Введи Telegram ID игрока и количество попыток, которые нужно начислить.</p>
+    <p>Введи Telegram ID игрока и количество попыток.</p>
 
-    <input
-     id="grant-player-id"
-     class="admin-input"
-     type="number"
-     inputmode="numeric"
-     placeholder="Telegram ID игрока"
-    >
+    <input id="grant-player-id" class="admin-input"
+     type="number" inputmode="numeric"
+     placeholder="Telegram ID игрока">
 
-    <input
-     id="grant-amount"
-     class="admin-input"
-     type="number"
-     inputmode="numeric"
-     min="1"
-     max="10000"
-     placeholder="Количество попыток"
-    >
+    <input id="grant-amount" class="admin-input"
+     type="number" inputmode="numeric" min="1" max="10000"
+     placeholder="Количество попыток">
 
     <button id="grant-button" type="button" style="width:100%;">
      НАЧИСЛИТЬ ПОПЫТКИ
@@ -268,14 +440,14 @@ function showAdminSection(section){
   `;
 
   document.getElementById("grant-button")
-   .addEventListener("click", grantAttempts);
+   .addEventListener("click",grantAttempts);
  }
 
  if(section === "history"){
   area.innerHTML = `
    <div class="admin-section">
     <h3 style="color:#f5ca63;">📜 ИСТОРИЯ ВЫИГРЫШЕЙ</h3>
-    <p>Здесь будет отображаться история вращений и призов игроков.</p>
+    <p>Раздел истории пока находится в разработке.</p>
    </div>
   `;
  }
@@ -290,12 +462,12 @@ async function grantAttempts(){
  const playerId = Number(playerInput.value);
  const amount = Number(amountInput.value);
 
- if(!Number.isSafeInteger(playerId) || playerId <= 0){
+ if(!Number.isSafeInteger(playerId) || playerId<=0){
   output.textContent = "Укажи правильный Telegram ID игрока.";
   return;
  }
 
- if(!Number.isInteger(amount) || amount < 1 || amount > 10000){
+ if(!Number.isInteger(amount) || amount<1 || amount>10000){
   output.textContent = "Количество попыток должно быть от 1 до 10000.";
   return;
  }
@@ -309,34 +481,20 @@ async function grantAttempts(){
  output.textContent = "Отправляем запрос...";
 
  try{
-  const response = await fetch(
-   SUPABASE_URL + "/functions/v1/admin-panel",
-   {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-     initData,
-     action:"grant_attempts",
-     target_telegram_id:playerId,
-     amount:amount
-    })
-   }
-  );
+  const data = await adminRequest({
+   action:"grant_attempts",
+   target_telegram_id:playerId,
+   amount
+  });
 
-  const data = await response.json();
-
-  if(!response.ok || !data.success){
-   throw new Error(data.error || "Не удалось начислить попытки.");
-  }
-
-  output.textContent = "✓ Успешно начислено " + amount +
-   " попыток игроку " + playerId + ".";
+  output.textContent = "✓ Успешно начислено "+amount+
+   " попыток игроку "+playerId+".";
 
   playerInput.value = "";
   amountInput.value = "";
 
  }catch(error){
-  output.textContent = "Ошибка: " + error.message;
+  output.textContent = "Ошибка: "+error.message;
  }finally{
   grantButton.disabled = false;
  }
@@ -374,7 +532,7 @@ async function connectTelegram(){
 
  try{
   const response = await fetch(
-   SUPABASE_URL + "/functions/v1/telegram-auth",
+   SUPABASE_URL+"/functions/v1/telegram-auth",
    {
     method:"POST",
     headers:{"Content-Type":"application/json"},
@@ -389,13 +547,15 @@ async function connectTelegram(){
   }
 
   authReady = true;
-  button.disabled = false;
   statusBox.textContent = "PRIME FORTUNE: подключено ✓";
 
+  await loadPrizeData();
+
+  button.disabled = prizes.length===0;
   await checkAdmin();
 
  }catch(error){
-  statusBox.textContent = "Ошибка подключения: " + error.message;
+  statusBox.textContent = "Ошибка подключения: "+error.message;
  }
 }
 
@@ -413,7 +573,7 @@ async function spin(){
 
  try{
   const response = await fetch(
-   SUPABASE_URL + "/functions/v1/telegram-spin",
+   SUPABASE_URL+"/functions/v1/telegram-spin",
    {
     method:"POST",
     headers:{"Content-Type":"application/json"},
@@ -429,31 +589,28 @@ async function spin(){
 
   const payload = Array.isArray(data) ? data[0] : data;
 
-  if(payload.success === false){
+  if(payload.success===false){
    throw new Error(payload.error || "Не удалось выполнить вращение");
   }
 
   const prizeName = getPrizeName(payload.prize);
-  const index = prizes.findIndex(
-   p => normalize(p) === normalize(prizeName)
-  );
+  const index = prizes.findIndex(p=>normalize(p)===normalize(prizeName));
 
-  if(index < 0){
-   throw new Error("Сервер вернул неизвестный приз: " + prizeName);
+  if(index<0){
+   throw new Error("Сервер вернул неизвестный приз: "+prizeName);
   }
 
-  const segment = 360 / prizes.length;
-  const target = 360*6 + (360-index*segment-segment/2);
+  const segment = 360/prizes.length;
+  const target = 360*6+(360-index*segment-segment/2);
 
   rotation += target;
   wheel.style.transform = `rotate(${rotation}deg)`;
 
   setTimeout(()=>{
-   resultBox.textContent = "Выпало: " + prizes[index] + "!";
+   resultBox.textContent = "Выпало: "+prizes[index]+"!";
 
-   if(payload.remaining_attempts !== undefined){
-    resultBox.textContent +=
-     " Осталось попыток: " + payload.remaining_attempts;
+   if(payload.remaining_attempts!==undefined){
+    resultBox.textContent += " Осталось попыток: "+payload.remaining_attempts;
    }
 
    busy = false;
