@@ -51,6 +51,17 @@ button:disabled{opacity:.6}
  background:#21190e;
 }
 .admin-section p{line-height:1.6;color:#c6a96a}
+.admin-input{
+ display:block;width:100%;margin:12px 0;padding:14px;
+ border:1px solid #a77b32;border-radius:10px;
+ background:#090909;color:#ffe29a;font-size:16px;
+ outline:none;
+}
+.admin-input::placeholder{color:#9d8962}
+.admin-message{
+ min-height:24px;margin-top:14px;line-height:1.5;
+ color:#ffe29a;font-size:14px;overflow-wrap:anywhere;
+}
 </style>
 </head>
 <body>
@@ -208,7 +219,7 @@ async function checkAdmin(){
    document.getElementById("admin-area").style.display = "block";
   }
  }catch(error){
-  console.error("Admin check failed");
+  console.error("Admin check failed", error);
  }
 }
 
@@ -228,9 +239,36 @@ function showAdminSection(section){
   area.innerHTML = `
    <div class="admin-section">
     <h3 style="color:#f5ca63;">🎯 НАЧИСЛЕНИЕ ПОПЫТОК</h3>
-    <p>Здесь будет начисление попыток игрокам по их Telegram ID.</p>
+    <p>Введи Telegram ID игрока и количество попыток, которые нужно начислить.</p>
+
+    <input
+     id="grant-player-id"
+     class="admin-input"
+     type="number"
+     inputmode="numeric"
+     placeholder="Telegram ID игрока"
+    >
+
+    <input
+     id="grant-amount"
+     class="admin-input"
+     type="number"
+     inputmode="numeric"
+     min="1"
+     max="10000"
+     placeholder="Количество попыток"
+    >
+
+    <button id="grant-button" type="button" style="width:100%;">
+     НАЧИСЛИТЬ ПОПЫТКИ
+    </button>
+
+    <div id="grant-result" class="admin-message" aria-live="polite"></div>
    </div>
   `;
+
+  document.getElementById("grant-button")
+   .addEventListener("click", grantAttempts);
  }
 
  if(section === "history"){
@@ -240,6 +278,67 @@ function showAdminSection(section){
     <p>Здесь будет отображаться история вращений и призов игроков.</p>
    </div>
   `;
+ }
+}
+
+async function grantAttempts(){
+ const playerInput = document.getElementById("grant-player-id");
+ const amountInput = document.getElementById("grant-amount");
+ const output = document.getElementById("grant-result");
+ const grantButton = document.getElementById("grant-button");
+
+ const playerId = Number(playerInput.value);
+ const amount = Number(amountInput.value);
+
+ if(!Number.isSafeInteger(playerId) || playerId <= 0){
+  output.textContent = "Укажи правильный Telegram ID игрока.";
+  return;
+ }
+
+ if(!Number.isInteger(amount) || amount < 1 || amount > 10000){
+  output.textContent = "Количество попыток должно быть от 1 до 10000.";
+  return;
+ }
+
+ if(!authReady || !initData){
+  output.textContent = "Нет подтверждённой авторизации Telegram.";
+  return;
+ }
+
+ grantButton.disabled = true;
+ output.textContent = "Отправляем запрос...";
+
+ try{
+  const response = await fetch(
+   SUPABASE_URL + "/functions/v1/admin-panel",
+   {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+     initData,
+     action:"grant_attempts",
+     target_telegram_id:playerId,
+     amount:amount
+    })
+   }
+  );
+
+  const data = await response.json();
+
+  if(!response.ok || !data.success){
+   throw new Error(data.error || "Не удалось начислить попытки.");
+  }
+
+  output.textContent = "✓ Успешно начислено " + amount +
+   " попыток игроку " + playerId + ".";
+
+  playerInput.value = "";
+  amountInput.value = "";
+
+ }catch(error){
+  output.textContent = "Ошибка: " + error.message;
+ }finally{
+  grantButton.disabled = false;
  }
 }
 
