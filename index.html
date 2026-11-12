@@ -1,0 +1,106 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRIME FORTUNE</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;min-height:100vh;color:#f8e7b0;
+ font-family:Arial,sans-serif;text-align:center;
+ background:radial-gradient(circle at top,#34230e,#090909 65%);
+ padding:25px 15px;
+}
+h1{font-size:32px;letter-spacing:5px;color:#f5ca63;margin:18px 0 5px}
+.subtitle{color:#c6a96a;letter-spacing:3px;font-size:12px}
+.card{
+ max-width:440px;margin:25px auto;padding:22px 15px;
+ border:1px solid #a77b32;border-radius:22px;
+ background:linear-gradient(145deg,#21190e,#090909);
+ box-shadow:0 0 35px #b17a2633;
+}
+#wheel{
+ width:min(82vw,340px);height:min(82vw,340px);
+ border-radius:50%;margin:12px auto 22px;
+ border:8px solid #d4a544;
+ box-shadow:0 0 0 5px #513a17,0 0 35px #d69b3b66;
+ transition:transform 5s cubic-bezier(.12,.75,.12,1);
+}
+button{
+ border:0;border-radius:12px;padding:17px 38px;
+ background:linear-gradient(135deg,#ffe29a,#b77b20);
+ color:#211405;font-weight:bold;font-size:16px;
+ letter-spacing:2px;cursor:pointer;
+ box-shadow:0 5px 20px #d69b3b55;
+}
+button:disabled{opacity:.6}
+#result{font-size:20px;margin:20px 0;color:#ffe29a;min-height:28px}
+.note{font-size:12px;color:#a9956c;line-height:1.6}
+</style>
+</head>
+<body>
+<h1>PRIME FORTUNE</h1>
+<div class="subtitle">YOUR LUCK · YOUR FORTUNE</div>
+<div class="card">
+ <h2>КОЛЕСО ФОРТУНЫ</h2>
+ <svg id="wheel" viewBox="0 0 340 340">
+  <defs>
+   <filter id="glow"><feGaussianBlur stdDeviation="3"/></filter>
+  </defs>
+  <g id="slices"></g>
+  <circle cx="170" cy="170" r="35" fill="#f3cf78" stroke="#fff0b4" stroke-width="5"/>
+  <text x="170" y="178" text-anchor="middle" font-size="19" font-weight="bold" fill="#291b08">PF</text>
+ </svg>
+ <button id="spin">КРУТИТЬ</button>
+ <div id="result">Твоя удача уже рядом!</div>
+ <div class="note">Демонстрационная версия. Результаты пока не сохраняются.</div>
+</div>
+<script>
+const prizes=["ЗОЛОТО","БОНУС","УДАЧА","ПРИЗ","VIP","СЮРПРИЗ","БОНУС","ДЖЕКПОТ"];
+const colors=["#bd852b","#35250e","#e0b65c","#493112","#d19a3e","#281d10","#b9822e","#4c3515"];
+const g=document.getElementById("slices");
+prizes.forEach((p,i)=>{
+ const a=i*Math.PI/4-Math.PI/2;
+ const b=(i+1)*Math.PI/4-Math.PI/2;
+ const x1=170+160*Math.cos(a),y1=170+160*Math.sin(a);
+ const x2=170+160*Math.cos(b),y2=170+160*Math.sin(b);
+ const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+ path.setAttribute("d",`M170 170 L${x1} ${y1} A160 160 0 0 1 ${x2} ${y2} Z`);
+ path.setAttribute("fill",colors[i]);
+ path.setAttribute("stroke","#f5d58a");
+ path.setAttribute("stroke-width","2");
+ g.appendChild(path);
+ const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+ const angle=(i+.5)*Math.PI/4-Math.PI/2;
+ t.setAttribute("x",170+105*Math.cos(angle));
+ t.setAttribute("y",170+105*Math.sin(angle));
+ t.setAttribute("text-anchor","middle");
+ t.setAttribute("dominant-baseline","middle");
+ t.setAttribute("fill","#fff0c4");
+ t.setAttribute("font-size","13");
+ t.setAttribute("font-weight","bold");
+ t.textContent=p;
+ g.appendChild(t);
+});
+let rotation=0,busy=false;
+document.getElementById("spin").onclick=()=>{
+ if(busy)return;
+ busy=true;
+ document.getElementById("spin").disabled=true;
+ document.getElementById("result").textContent="Удача выбирает...";
+ const index=Math.floor(Math.random()*prizes.length);
+ const segment=360/prizes.length;
+ const target=360*6+(360-index*segment-segment/2);
+ rotation+=target;
+ document.getElementById("wheel").style.transform=`rotate(${rotation}deg)`;
+ setTimeout(()=>{
+  document.getElementById("result").textContent="Выпало: "+prizes[index]+"!";
+  busy=false;
+  document.getElementById("spin").disabled=false;
+ },5100);
+};
+</script>
+</body>
+</html>
