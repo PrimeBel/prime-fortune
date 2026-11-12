@@ -30,15 +30,27 @@ h1{font-size:32px;letter-spacing:5px;color:#f5ca63;margin:18px 0 5px}
  transition:transform 5s cubic-bezier(.12,.75,.12,1);
 }
 button{
- border:0;border-radius:12px;padding:17px 38px;
+ border:0;border-radius:12px;padding:17px 20px;
  background:linear-gradient(135deg,#ffe29a,#b77b20);
- color:#211405;font-weight:bold;font-size:16px;
- letter-spacing:2px;cursor:pointer;
+ color:#211405;font-weight:bold;font-size:15px;
+ letter-spacing:1px;cursor:pointer;
  box-shadow:0 5px 20px #d69b3b55;
 }
 button:disabled{opacity:.6}
 #result{font-size:20px;margin:20px 0;color:#ffe29a;min-height:28px}
 .note{font-size:12px;color:#a9956c;line-height:1.6}
+.admin-button{width:100%;margin:10px 0}
+.admin-content{
+ display:none;color:#f8e7b0;margin:20px auto;
+ max-width:440px;
+}
+.admin-content h2{color:#f5ca63}
+.admin-section{
+ margin-top:20px;padding:15px;
+ border:1px solid #a77b32;border-radius:15px;
+ background:#21190e;
+}
+.admin-section p{line-height:1.6;color:#c6a96a}
 </style>
 </head>
 <body>
@@ -46,33 +58,52 @@ button:disabled{opacity:.6}
 <div id="auth-status" style="color:#d4af37;text-align:center;padding:10px;">
 Подключение к PRIME FORTUNE...
 </div>
- 
+
 <div id="admin-area" style="display:none;max-width:440px;margin:15px auto;">
-  <button id="admin-open" style="width:100%;">
-    АДМИН-ПАНЕЛЬ
+ <button id="admin-open" style="width:100%;">
+  АДМИН-ПАНЕЛЬ
+ </button>
+
+ <div id="admin-content" class="admin-content">
+  <h2>УПРАВЛЕНИЕ ИГРОЙ</h2>
+
+  <button class="admin-button" onclick="showAdminSection('prizes')">
+   🎁 УПРАВЛЕНИЕ ПРИЗАМИ
   </button>
 
-  <div id="admin-content" style="display:none;color:#f8e7b0;margin-top:15px;">
-    <h2>УПРАВЛЕНИЕ PRIME FORTUNE</h2>
-    <p>Панель администратора</p>
-    <p>Скоро здесь появится управление призами и попытками.</p>
-  </div>
+  <button class="admin-button" onclick="showAdminSection('attempts')">
+   🎯 НАЧИСЛЕНИЕ ПОПЫТОК
+  </button>
+
+  <button class="admin-button" onclick="showAdminSection('history')">
+   📜 ИСТОРИЯ ВЫИГРЫШЕЙ
+  </button>
+
+  <div id="admin-section"></div>
+
+  <button id="admin-back" style="width:100%;margin-top:20px;">
+   ← НАЗАД К КОЛЕСУ
+  </button>
+ </div>
 </div>
-<h1>PRIME FORTUNE</h1>
-<div class="subtitle">YOUR LUCK · YOUR FORTUNE</div>
 
-<div class="card">
- <h2>КОЛЕСО ФОРТУНЫ</h2>
+<div id="main-screen">
+ <h1>PRIME FORTUNE</h1>
+ <div class="subtitle">YOUR LUCK · YOUR FORTUNE</div>
 
- <svg id="wheel" viewBox="0 0 340 340">
-  <g id="slices"></g>
-  <circle cx="170" cy="170" r="35" fill="#f3cf78" stroke="#fff0b4" stroke-width="5"/>
-  <text x="170" y="178" text-anchor="middle" font-size="19" font-weight="bold" fill="#291b08">PF</text>
- </svg>
+ <div class="card">
+  <h2>КОЛЕСО ФОРТУНЫ</h2>
 
- <button id="spin" disabled>КРУТИТЬ</button>
- <div id="result">Твоя удача уже рядом!</div>
- <div class="note">Результаты определяются и сохраняются на сервере.</div>
+  <svg id="wheel" viewBox="0 0 340 340">
+   <g id="slices"></g>
+   <circle cx="170" cy="170" r="35" fill="#f3cf78" stroke="#fff0b4" stroke-width="5"/>
+   <text x="170" y="178" text-anchor="middle" font-size="19" font-weight="bold" fill="#291b08">PF</text>
+  </svg>
+
+  <button id="spin" disabled>КРУТИТЬ</button>
+  <div id="result">Твоя удача уже рядом!</div>
+  <div class="note">Результаты определяются и сохраняются на сервере.</div>
+ </div>
 </div>
 
 <script>
@@ -159,6 +190,7 @@ function getPrizeName(prize){
 
  return "";
 }
+
 async function checkAdmin(){
  try{
   const response = await fetch(
@@ -180,11 +212,51 @@ async function checkAdmin(){
  }
 }
 
+function showAdminSection(section){
+ const area = document.getElementById("admin-section");
+
+ if(section === "prizes"){
+  area.innerHTML = `
+   <div class="admin-section">
+    <h3 style="color:#f5ca63;">🎁 УПРАВЛЕНИЕ ПРИЗАМИ</h3>
+    <p>Здесь будет редактирование названий, вероятностей и остатков призов.</p>
+   </div>
+  `;
+ }
+
+ if(section === "attempts"){
+  area.innerHTML = `
+   <div class="admin-section">
+    <h3 style="color:#f5ca63;">🎯 НАЧИСЛЕНИЕ ПОПЫТОК</h3>
+    <p>Здесь будет начисление попыток игрокам по их Telegram ID.</p>
+   </div>
+  `;
+ }
+
+ if(section === "history"){
+  area.innerHTML = `
+   <div class="admin-section">
+    <h3 style="color:#f5ca63;">📜 ИСТОРИЯ ВЫИГРЫШЕЙ</h3>
+    <p>Здесь будет отображаться история вращений и призов игроков.</p>
+   </div>
+  `;
+ }
+}
+
 document.getElementById("admin-open").addEventListener("click",()=>{
- const panel = document.getElementById("admin-content");
- panel.style.display =
-  panel.style.display === "none" ? "block" : "none";
+ document.getElementById("main-screen").style.display = "none";
+ document.getElementById("admin-open").style.display = "none";
+ document.getElementById("admin-content").style.display = "block";
+ document.getElementById("admin-section").innerHTML = "";
 });
+
+document.getElementById("admin-back").addEventListener("click",()=>{
+ document.getElementById("main-screen").style.display = "block";
+ document.getElementById("admin-open").style.display = "block";
+ document.getElementById("admin-content").style.display = "none";
+ document.getElementById("admin-section").innerHTML = "";
+});
+
 async function connectTelegram(){
  if(!window.Telegram || !Telegram.WebApp){
   statusBox.textContent = "Открой приложение через Telegram";
@@ -220,8 +292,9 @@ async function connectTelegram(){
   authReady = true;
   button.disabled = false;
   statusBox.textContent = "PRIME FORTUNE: подключено ✓";
-await checkAdmin();
-  
+
+  await checkAdmin();
+
  }catch(error){
   statusBox.textContent = "Ошибка подключения: " + error.message;
  }
